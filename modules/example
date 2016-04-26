@@ -1,0 +1,35 @@
+#!/bin/bash
+#
+# example input_prefix number n
+#
+# input_prefix: input prefix, to find input files. [list: input ?]
+# number:       A number (allows for decimals). [float]
+# n:            Number of header lines from the input to cat to the output. [int]
+#
+# output: example_output
+# prereq:
+#
+# Looks for files beginning with the prefix defined by input_prefix (default is
+# 'input'. This example prints the float to the screen, and finally cats the
+# top n lines of the input file to an output text file.
+
+echo '*** MODULE: example. Prints nonsense to the screen and text files. ******'
+
+input_prefix=${1}
+number=${2}
+n=${3}
+
+directory=$(${DIR_DATA}/${DIR_EXPT}/${SUB}/${DATA_TYPE})
+
+# loop through sessions
+for sess in $(ls -d -- ${directory}/*/); do
+
+    echo "I phoned my mom ${number} times today!"
+
+    # loop through runs
+    inputs=$(find ${sess} -type f -name '${input_prefix}*' | sort)
+    for run in ${runs}; do
+        run_name=$(basename ${run})
+        cat ${run} | head -n ${n} > ${sess}/example_output.${run_name}
+    done
+done

@@ -1,0 +1,448 @@
+#!/usr/bin/env python
+"""
+     _  _  _ .  _  |_     . |_  | a platform for bash pipeline development
+    _) (_ |  | |_) |_ |_| | |_  | github.com/josephdviviano/scriptuit
+               |                |
+
+    scriptuit list        -- prints a list of all available modules
+    scriptuit help module -- prints help for module
+    scriptuit check       -- checks installation
+    scriptuit verify      -- checks input files for experiment
+    scriptuit run         -- produce scripts
+    scriptuit clean       -- delete outputs
+"""
+import os, sys, stat
+from copy import copy
+import scriptuit as sit
+from fnmatch import fnmatch
+import textwrap
+
+DIR_DATA = os.getenv('SCRIPTUIT_DATA')
+DIR_MODULES = os.getenv('SCRIPTUIT_MODULES')
+
+def get_modules(interactive=False, used=None):
+    """
+    Prints the available modules. If provided with a list of 'used' modules,
+    these are stripped from the output.
+    """
+    dir_modules = os.getenv('SCRIPTUIT_MODULES')
+    if not dir_modules:
+        sys.exit('ERROR: Environment variable SCRIPTUIT_MODULES not defined.')
+
+    module_list = [f for f in os.listdir(dir_modules)
+                           if os.path.isfile(os.path.join(dir_modules, f))]
+
+    # remove used modules from list
+    if used:
+        for u in used:
+            try:
+                module_list.remove(u)
+            except:
+                pass
+
+    if interactive == True:
+        try:
+            selection = sit.utilities.selector_list(module_list)
+            used.append(selection)
+            return selection, used
+
+        except ValueError as ve:
+            print('Invalid selection')
+            return None, used
+    else:
+        print('modules available in {}:\n'.format(dir_modules))
+        sit.utilities.print_list_cols(module_list)
+
+def get_mode(expt):
+    """
+    Prints the available image modalities. Optionally prompts the user to
+    select one.
+    """
+    dir_data = os.getenv('SCRIPTUIT_DATA')
+
+    if not dir_data:
+        sys.exit('ERROR: Environment variable SCRIPTUIT_DATA not defined.')
+
+    # get a sorted list of the experiments
+    expt = os.path.join(DIR_DATA, expt)
+    subjects = [d for d in os.listdir(expt)
+                        if os.path.isdir(os.path.join(expt, d))]
+
+    mode_list = []
+    for subj in subjects:
+        subjdir = os.path.join(expt, subj)
+        modes = [d for d in os.listdir(subjdir) if os.path.isdir(os.path.join(subjdir, d))]
+        mode_list.extend(modes)
+
+    mode_list = list(set(mode_list)) # keep unique entries
+    try:
+        selection = sit.utilities.selector_list(mode_list)
+        return selection
+    except ValueError as ve:
+        return None
+
+def get_experiments(check=None):
+    """
+    Prints the available experiments. Optionally prompts the user to select
+    one.
+    """
+    dir_data = os.getenv('SCRIPTUIT_DATA')
+    if sit.utilities.has_permissions(dir_data) == False:
+        sys.exit('ERROR: You do not have write permission to {}'.format(dir_data))
+
+    # get a sorted list of the experiments
+    expt_list = [d for d in os.listdir(dir_data)
+                         if os.path.isdir(os.path.join(dir_data, d))]
+
+    try:
+        selection = sit.utilities.selector_list(expt_list)
+
+        # this is for the commandline usage
+        if check == 'check':
+            check_directories(selection)
+        # this is an internal usage
+        else:
+            return selection
+
+    except ValueError as ve:
+        return None
+
+def get_help(module):
+    """
+    Prints the module header line by line, wrapping long sections.
+    """
+    dir_modules = os.getenv('SCRIPTUIT_MODULES')
+    f = open(os.path.join(dir_modules, module))
+    helpfile = f.readlines()
+
+    for line in helpfile:
+        if line.startswith('#!'):
+            pass
+        elif line.startswith('#'):
+            if len(line) < 80:
+                print line.strip('#\n').lstrip(' ')
+            else:
+                print("\n".join(textwrap.wrap(line.strip('#').lstrip(' '))))
+        else:
+            break
+
+def check_environment(mode='verbose'):
+    """
+    Checks manditory environent variables and exits if they defined improperly.
+    """
+    dir_modules = os.getenv('SCRIPTUIT_MODULES')
+    dir_data = os.getenv('SCRIPTUIT_DATA')
+
+    if dir_data == None:
+        sys.exit('ERROR: SCRIPTUIT_DATA variable is not set.')
+    if os.path.isdir(dir_data) == False:
+        sys.exit('ERROR: scriptuit data directory does not exist: {}'.format(dir_data))
+    if sit.utilities.has_permissions(dir_data) == False:
+        sys.exit("ERROR: no write permissions for {}".format(dir_data))
+
+    if dir_modules == None:
+        sys.exit('ERROR: SCRIPTUIT_MODULES variable is not set')
+    if os.path.isdir(dir_modules) == False:
+        sys.exit('ERROR: scriptuit modules directory does not exist: {}'.format(dir_modules))
+
+    # format uses global variables defined at top of scriptuit
+    if mode == 'verbose':
+        print('scriptuit configuration:\n'
+              '    data directory   : {dir_data}\n'
+              '    module directory : {dir_modules}\n'.format(
+                                       dir_data=dir_data, dir_modules=dir_modules))
+
+def check_run(expt, subj, mode, sess, run):
+    """
+    Returns True if RUN folder contains a NIFTI file, False otherwise.
+
+    Usage:
+        truth = check_run(experiment, subject, image modality, session, run)
+    """
+    dir_data = os.getenv('SCRIPTUIT_DATA')
+
+    # retrieve the number of files within each run folder
+    dir_file = os.path.join(dir_data, expt, subj, mode, sess, run)
+    file_list = [d for d in os.listdir(dir_file)
+                         if os.path.isfile(os.path.join(dir_file, d))]
+
+    n_files = filter(lambda x: x[-7:] == '.nii.gz' or
+                               x[-4:] == '.nii', file_list)
+    n_files = len(n_files)
+
+    return n_files
+
+def check_mode(expt, subj, mode):
+    """
+    This returns each image modality's total number of runs and checks for run
+    folders with missing data.
+    """
+    n_runs = 0
+    dir_data = os.getenv('SCRIPTUIT_DATA')
+
+    # retrieve the sessions for a given image modality
+    dir_mode = os.path.join(dir_data, expt, subj, mode)
+    sess_list = [d for d in os.listdir(dir_mode)
+                         if os.path.isdir(os.path.join(dir_mode, d))]
+
+    # retrieve runs for a given session
+    for sess in sess_list:
+        dir_sess = os.path.join(dir_mode, sess)
+        run_list = [d for d in os.listdir(dir_sess)
+                            if os.path.isdir(os.path.join(dir_sess, d))
+                            and d[0:3] == 'RUN']
+
+        # check for runs missing/too many NIFTI files, print warnings
+        for run in run_list:
+            n_files = check_run(expt, subj, mode, sess, run)
+            n_runs = n_runs + n_files
+
+            if n_files == 0:
+                print('subject {}, {}, sess {}, run {} contains no NIFTI file.'.format(
+                    str(subj), str(mode), str(sess), str(run)))
+
+            if n_files > 1:
+                print('subject {}, {}, sess {}, run {} contains {} NIFTI files.'.format(
+                    str(subj), str(mode), str(sess), str(run), str(n_files)))
+    return n_runs
+
+def check_directories(expt):
+    """
+    This checks the image modalities for each subject in an experiment. It also
+    reports the number of subjects with each kind of image modality.
+    """
+    dir_data = os.getenv('SCRIPTUIT_DATA')
+
+    if sit.utilities.has_permissions(os.path.join(dir_data, expt)) == False:
+        sys.exit('ERROR: you do not have permissions to edit this experiment.')
+
+    # attempt to access the subjects for a given experiment
+    try:
+        subjects = sit.utilities.get_subj(os.path.join(dir_data, expt))
+    except:
+        print('ERROR: experiment path is incorrect {}'.format(expt))
+
+    # this dict will hold our count
+    mode_dict = {}
+
+    # loop through subjects, returning image modality counts, and record
+    for subj in subjects:
+
+        # retrieve the image modalities for a given subject
+        dir_subj = os.path.join(dir_data, expt, subj)
+        mode_list = [d for d in os.listdir(dir_subj)
+                             if os.path.isdir(os.path.join(dir_subj, d))]
+
+        for mode in mode_list:
+            # check inside each modality, get the number of sessions
+            n_runs = check_mode(expt, subj, mode)
+
+            # add them to the count
+            try:
+                mode_dict[str(mode)] = mode_dict[str(mode)] + n_runs
+            except:
+                mode_dict[str(mode)] = n_runs
+
+    # print out the file counts per image modality
+    print('')
+    for mode_key in mode_dict:
+        print('     {} NIFTIs in {}'.format(str(mode_dict[mode_key]), str(mode_key)))
+    print('')
+
+def get_loop(function, *args):
+    """
+    Runs the supplied function until the function no longer returns none.
+    """
+    var = None
+    while var is None:
+        var = function(*args)
+    return var
+
+def cleanup():
+    """
+    Removes stages of a scriptuit pipeline.
+    """
+    dir_data = os.getenv('SCRIPTUIT_DATA')
+    sit.utilities.check_os()
+
+    print('scriptuit cleanup: this deletes data.')
+    expt = get_loop(get_experiments)
+    if expt == 'stop':
+        sys.exit()
+
+    print('experiment: {}. select image modality.'.format(expt))
+    mode = get_loop(get_mode, expt)
+    if mode == 'stop':
+        sys.exit()
+
+    # get the subjects
+    print('cleanup all subjects, or some?')
+    decision = get_loop(sit.utilities.selector_list, ['all', 'some'])
+
+    if decision == 'stop':
+        sys.exit()
+
+    elif decision == 'some':
+        flag = 0
+        subjects = []
+        subj_list = sit.utilities.get_subj(os.path.join(dir_data, expt))
+
+        while flag == 0:
+            print("select subject to cleanup. type 'stop' to stop.")
+            subj = get_loop(sit.utilities.selector_list, subj_list)
+
+            if subj == 'stop':
+                flag = 1
+                continue
+
+            subjects.append(subj)
+            subj_list.remove(subj)
+            print('The following subjects are slated for cleanup:\n')
+            sit.utilities.print_list(subjects)
+
+    elif decision == 'all':
+        subjects = sit.utilities.get_subj(os.path.join(dir_data, expt))
+        print('All subjects slated for cleanup.')
+
+    # get all files with given pattern
+    print("Input target file-name pattern to delete (e.g., '.txt'):")
+    extension = raw_input('extension: ')
+    fnames = sit.utilities.find_files(os.path.join(dir_data, expt), extension, exclude='RUN', level=2)
+    prefixes = []
+
+    for f in fnames:
+        prefixes.append(os.path.basename(f).split('.')[0])
+
+    prefixes = (list(set(prefixes)))
+    prefixes.sort()
+
+    # pick files by their prefix to remove
+    remove = []
+    flag = 0
+    while flag == 0:
+        print("Select file types to remove. Type 'stop' to stop.")
+        prefix = get_loop(sit.utilities.selector_list, prefixes)
+
+        if prefix == 'stop':
+            flag = 1
+            continue
+
+        remove.append(prefix)
+        prefixes.remove(prefix)
+
+        print('The following file types are slated to be removed:\n')
+        sit.utilities.print_list(remove)
+
+    # loop through subjects, removing specified files in the selected modality
+    for prefix in remove:
+        for subj in subjects:
+            purge(sit.utilities.find_files(os.path.join(dir_data, expt, subj, mode), prefix, exclude='RUN'))
+
+def main():
+    """
+    Runs the pipeline generator.
+    """
+    sit.utilities.check_os()
+    check_environment('quiet')
+    datetime, user, f_id = sit.utilities.get_date_user()
+    dir_data = os.getenv('SCRIPTUIT_DATA')
+    dir_modules = os.getenv('SCRIPTUIT_MODULES')
+
+    # define experiment directory and check permissions
+    print('Thank you for choosing scriptuit!\nSelect experiment:')
+    expt = get_loop(get_experiments)
+    if expt == 'stop':
+        sys.exit()
+    if sit.utilities.has_permissions(os.path.join(DIR_DATA, expt)) == False:
+        sys.exit("You do not have permission to write in {}".format(os.path.join(DIR_DATA, expt)))
+
+    # get the date and time, current user, f_id, set dir_pipe to be local
+    print('input ID for this run of scriptuit:')
+    ID = raw_input('ID: ')
+    ID = sit.utilities.mangle_string(ID)
+    master = 'master_{}_{}.sh'.format(f_id, ID)
+
+    print('experiment: {}\nselect modality:'.format(expt))
+    mode = get_loop(get_mode, expt)
+    if mode == 'stop':
+        sys.exit()
+
+    print('modality: {}\ninitializing master script.'.format(mode))
+    f = open(os.path.join(DIR_DATA, expt, master), 'wb')
+    f.write('#!/bin/bash\n'
+            'set -e\n\n'
+            '# Master scriptuit for {expt}: {mode}.\n'
+            '# Generated: {datetime} by {user}.\n\n'
+            '## Setup\n'
+            'export DIR_MODULES={dir_modules}\n'
+            'export DIR_DATA={dir_data}\n'
+            'export DIR_EXPT={expt}\n'
+            'export DATA_TYPE={mode}\n'
+            'export ID={ID}\n\n'
+            'export PROC=${{DIR_DATA}}/${{DIR_EXPT}}/{proc}\n\n'
+            'export SUBJECTS=$(cat ${{DIR_EXPT}}/subjects.txt)\n\n'
+            '## Pipeline\n'
+            'for SUB in ${{SUBJECTS}}; do\n\n'.format(
+                dir_modules=dir_modules, dir_data=dir_data, expt=expt,
+                mode=mode, ID=ID, user=user, datetime=datetime))
+
+    p_list = [] # keeps track of our command-list
+    used = []   # keeps track of the modules run
+    flag = 0
+    while flag == 0:
+        print('select the next pipeline module:')
+        module, used = get_modules(interactive=True, used=used)
+
+        if module == 'stop':
+            flag = 1
+            continue
+        elif module == None:
+            print('')
+        else:
+            # save the old output
+            bkup = copy(output)
+
+            # parses module, write pipeline commands
+            prereq, output, command = sit.utilities.parse(os.path.join(dir_modules, module), used_list)
+
+            # write command to file if successful
+            if command:
+                p_list = sit.utilities.writer(f, p_list, command)
+            else:
+                used.pop()
+                output = copy(bkup)
+
+        # print the current pipeline configuration, ask to continue
+        print('Current pre-processing pipeline:')
+        sit.utilities.print_list(p_list)
+        response = raw_input("Type 'stop' to stop, else continue: ")
+        if response == 'stop':
+            flag = 1
+
+    # add each subject to the proclist, close the subject loop
+    f.write('\ndone\n')
+
+    # close the file, make executable by owner + group, and execute
+    print('saving master script')
+    f.close()
+    os.chmod(os.path.join(dir_data, expt, master), 0755)
+
+if __name__ == "__main__":
+
+    # print help for the defined module
+    if len(sys.argv) == 3 and sys.argv[1] == 'help':
+        get_help(sys.argv[2])
+    elif len(sys.argv) == 2 and sys.argv[1] == 'list':
+        get_modules()
+    elif len(sys.argv) == 2 and sys.argv[1] == 'verify':
+        print('Please specify an experiment.')
+        get_experiments(check='check')
+    elif len(sys.argv) == 2 and sys.argv[1] == 'check':
+        check_environment('verbose')
+    elif len(sys.argv) == 2 and sys.argv[1] == 'clean':
+        run_cleanup()
+    elif len(sys.argv) == 2 and sys.argv[1] == 'run':
+        main()
+    else:
+        print(__doc__)
+
