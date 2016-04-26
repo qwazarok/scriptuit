@@ -1,5 +1,4 @@
-scriptuit: a pipeline development environment
----------------------------------------------
+![scriptuit](assets/logo.png "scriptuit: a platform for BASH pipeline development")
 
 scriptuit is an environment for developing pipelines out of BASH 'modules'. It is intended to produce portable BASH analysis scripts out of small code chunks that non-programmers can contribute.
 
