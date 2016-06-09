@@ -31,6 +31,7 @@ def get_modules(interactive=False, used=None):
 
     module_list = [f for f in os.listdir(dir_modules)
                            if os.path.isfile(os.path.join(dir_modules, f))]
+    module_list.sort()
 
     # remove used modules from list
     if used:
@@ -384,15 +385,15 @@ def main():
             'export DIR_EXPT={expt}\n'
             'export DATA_TYPE={mode}\n'
             'export ID={ID}\n\n'
-            'export PROC=${{DIR_DATA}}/${{DIR_EXPT}}/{proc}\n\n'
             'export SUBJECTS=$(cat ${{DIR_EXPT}}/subjects.txt)\n\n'
             '## Pipeline\n'
             'for SUB in ${{SUBJECTS}}; do\n\n'.format(
                 dir_modules=dir_modules, dir_data=dir_data, expt=expt,
                 mode=mode, ID=ID, user=user, datetime=datetime))
 
-    p_list = [] # keeps track of our command-list
-    used = []   # keeps track of the modules run
+    p_list = []    # keeps track of our command-list
+    used = []      # keeps track of the modules run
+    output = None  # keeps track of last module's output
     flag = 0
     while flag == 0:
         print('select the next pipeline module:')
@@ -408,7 +409,7 @@ def main():
             bkup = copy(output)
 
             # parses module, write pipeline commands
-            prereq, output, command = sit.utilities.parse(os.path.join(dir_modules, module), used_list)
+            prereq, output, command = sit.utilities.parse(os.path.join(dir_modules, module), used)
 
             # write command to file if successful
             if command:
