@@ -307,7 +307,8 @@ def cleanup():
     # get all files with given pattern
     print("Input target file-name pattern to delete (e.g., '.txt'):")
     extension = raw_input('extension: ')
-    fnames = sit.utilities.find_files(os.path.join(dir_data, expt), extension, exclude='RUN', level=2)
+    fnames = [x for x in sit.utilities.find_files(
+                 os.path.join(dir_data, expt), extension, exclude='RUN', level=3)][0]
     prefixes = []
 
     for f in fnames:
@@ -330,13 +331,17 @@ def cleanup():
         remove.append(prefix)
         prefixes.remove(prefix)
 
-        print('The following file types are slated to be removed:\n')
-        sit.utilities.print_list(remove)
+    print('The following file types are slated to be removed:\n')
+    sit.utilities.print_list(remove)
 
     # loop through subjects, removing specified files in the selected modality
     for prefix in remove:
         for subj in subjects:
-            purge(sit.utilities.find_files(os.path.join(dir_data, expt, subj, mode), prefix, exclude='RUN'))
+            print(os.path.join(dir_data, expt, subj, mode))
+            to_remove = [x for x in sit.utilities.find_files(
+                 os.path.join(dir_data, expt, subj, mode), prefix, exclude='RUN', level=2)][0]
+            print(to_remove)
+            #purge(to_remove)
 
 def main():
     """
@@ -440,7 +445,7 @@ if __name__ == "__main__":
     elif len(sys.argv) == 2 and sys.argv[1] == 'check':
         check_environment('verbose')
     elif len(sys.argv) == 2 and sys.argv[1] == 'clean':
-        run_cleanup()
+        cleanup()
     elif len(sys.argv) == 2 and sys.argv[1] == 'run':
         main()
     else:
