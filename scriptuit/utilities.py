@@ -67,7 +67,7 @@ def selector_list(item_list):
     numbered_list = []
     for i, item in enumerate(item_list):
         numbered_list.append('{}: {}'.format(str(i+1), item))
-    print_list(numbered_list)
+    print_list_cols(numbered_list)
 
     # retrieve the option number
     option = raw_input('option #: ')
@@ -102,8 +102,6 @@ def print_list_cols(l):
     """
     Prints a list in two columns, real pretty like.
     """
-    if n == 2:
-        l.sort()
     while len(l) % 3 != 0:
         l.append(" ")
 
@@ -285,7 +283,7 @@ def get_line(header, pattern):
             else:
                 return(h)
 
-def parse(module):
+def parse(module, used):
     """
     Parses a scriptuit header, finding prerequisites, output prefixes, and
     module arguments. Asks the user a series of questions to
@@ -295,6 +293,8 @@ def parse(module):
     output  = get_line(header, 'output:')
     args    = get_line(header, os.path.basename(module))
     options = get_opts(header, args)
+
+
 
     for h in header:
         print(h)
