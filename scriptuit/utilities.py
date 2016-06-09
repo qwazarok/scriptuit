@@ -103,7 +103,7 @@ def print_list_cols(l):
     Prints a list in two columns, real pretty like.
     """
     if n == 2:
-    l.sort()
+        l.sort()
     while len(l) % 3 != 0:
         l.append(" ")
 
@@ -162,7 +162,6 @@ def find_files(directory, include, exclude=None, level=1):
     assert os.path.isdir(directory)
     num_sep = directory.count(os.path.sep) # n dirs already in the supplied path
     for pth, dirs, files in os.walk(directory, topdown=True):
-        yield pth, dirs, files
 
         # remove directories lower that n levels
         num_sep_this = pth.count(os.path.sep)
@@ -176,8 +175,8 @@ def find_files(directory, include, exclude=None, level=1):
         for f in files:
             if include in f:
                 fnames.append(os.path.join(pth, f))
-
-    return fnames
+    yield fnames
+    return
 
 def writer(f, p_list, command):
     """
