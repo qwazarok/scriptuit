@@ -5,6 +5,7 @@ subject numbers/names, checking paths, gathering information, etc.
 """
 
 import os, sys
+import re
 
 def selector_float():
     """
@@ -58,7 +59,7 @@ def selector_list(item_list):
     Prompts the user to select from an item in the supplied list.
     """
     if type(item_list) != list:
-        raise TypeError('Input must be a list!')
+        raise TypeError('ERROR: input to selector_list must be a list!')
 
     # sort the input list
     item_list.sort()
@@ -83,12 +84,15 @@ def selector_list(item_list):
     except:
         print('ERROR: option # invalid.')
         return None
+
     if int(option) == 0:
         print('ERROR: option # invalid.')
         return None
+
     if response == '?':
         response = raw_input('custom input: ')
         response.strip(' ')
+
     return response
 
 def print_list(lst):
@@ -180,7 +184,7 @@ def writer(f, p_list, command):
     """
     Writes lines to the master script.
     """
-    f.write(command)
+    f.write(command+'\n')
     p_list.append(command)
 
     return p_list
@@ -283,46 +287,109 @@ def get_line(header, pattern):
             else:
                 return(h)
 
-def parse(module, used):
+def check_match(a, b):
     """
-    Parses a scriptuit header, finding prerequisites, output prefixes, and
-    module arguments. Asks the user a series of questions to
+    Checks if prerequisite a matches any item in b, ignoring cases.
     """
+    for item in b:
+        r = re.compile('^{}'.format(a.lower().replace('*','+')))
+        if r.match(item.lower()):
+            return
+
+    # if we get this far, nothing was matched
+    raise ValueError('ERROR: prerequisite {} not met'.format(a))
+
+def check_prerequisites(prerequisites, usedModules):
+    """
+    For each prerequisite in the list 'prerequisites', ensures there is a
+    matching entry in the list 'usedModules'. Any prerequisite can contain a
+    wildcard e.g., init_*, which will accept any used module starting with
+    'init_'. This isn't case sensitive.
+
+    If this function fails for any prerequisite, it raises an exception.
+    """
+    for prereq in prerequisites:
+        try:
+            check_match(prereq, usedModules)
+        except:
+            print('Prerequisites:')
+            print_list(prerequisites)
+            raise
+
+def parse(module, usedModules=[], outputFiles=[], verbose=False):
+    """
+    Parses a scriptuit header. First this checks prerequisites modules have been
+    run. It then records the output prefix, and asks the user a series of
+    questions to fill in the module arguments.
+
+    Returns the module name and the full string that should be passed to the
+    master scriptuit file.
+    """
+    moduleName = os.path.basename(module)
     header  = get_header(module)
     prereq  = get_line(header, 'prereq:')
     output  = get_line(header, 'output:')
-    args    = get_line(header, os.path.basename(module))
+    args    = get_line(header, moduleName)
     options = get_opts(header, args)
 
+    if verbose:
+        for h in header:
+            print(h)
 
+    n_inputs = len(filter(lambda x: 'input' == x.lower(), args))
+    if output:
+        assert len(output) == 1, 'ERROR: More than one output defined for {}'.format(moduleName)
+    inputFile = None # useless default value ... to remove?
+    if prereq:
+        try:
+            check_prerequisites(prereq, usedModules)
+        except:
+            raise
 
-    for h in header:
-        print(h)
+    # get the input name from the last item in the used list
+    if n_inputs > 0:
+        assert n_inputs == 1, 'ERROR: More than one input defined for {}'.format(moduleName)
+        assert len(outputFiles) > 0, 'ERROR: module {} has input defined but no outputs have been generated yet'.format(moduleName)
+        inputFile = outputFiles[-1] # always use the most recent file as input
 
-    if len(output) > 1:
-        raise SyntaxError('ERROR: More than one output defined for {}'.format(module))
+    if verbose:
+        print('# of inputs: {}'.format(n_inputs))
+        print('output name: {}'.format(output))
+        print('module name: {}'.format(moduleName))
+        print('input name:  {}'.format(inputFile))
+        print('output list: {}'.format(outputFiles))
+        print('module list: {}'.format(usedModules))
+
+    # initialize the command with the module name and input if required
+    if n_inputs == 0:
+        command = moduleName
+    else:
+        command = '{} {}'.format(moduleName, inputFile)
 
     # loop through options dictionary and build up command line
-    command = os.path.basename(module)
-
     for opt in options.keys():
-        print('\n{}: {}'.format(opt, ' '.join(get_line(header, '{}:'.format(opt)))))
-        if options[opt].startswith('list'):
-            response = sit.utilities.selector_list(options[opt].split(':')[1].strip().split(' '))
-        elif options[opt].startswith('float'):
-            response = sit.utilities.selector_float()
-        elif options[opt].startswith('int'):
-            response = sit.utilities.selector_int()
-        else:
-            raise SyntaxError('ERROR: malformed option found in module header.')
 
-        # check if we got a reasonable response, construct command if we did
+        print('\n{}: {}'.format(opt, ' '.join(get_line(header, '{}:'.format(opt)))))
+
+        if options[opt].startswith('list'):
+            response = selector_list(options[opt].split(':')[1].strip().split(' '))
+        elif options[opt].startswith('float'):
+            response = selector_float()
+        elif options[opt].startswith('int'):
+            response = selector_int()
+        else:
+            raise SyntaxError('ERROR: malformed option found in module {} header.'.format(moduleName))
+
         if response:
             command = '{} {}'.format(command, response)
         else:
-            command = None
+            raise ValueError
 
-    return prereq, output, command
+    # append output file name to list
+    if output:
+        outputFiles.append(output[0]) # output is returned as a list
+
+    return outputFiles, command
 
 def print_dirs(in_dir):
     """

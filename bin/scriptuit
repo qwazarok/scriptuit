@@ -47,9 +47,9 @@ def get_modules(interactive=False, used=None):
             used.append(selection)
             return selection, used
 
-        except ValueError as ve:
-            print('Invalid selection')
-            return None, used
+        except:
+            raise ValueError('ERROR: Invalid selection')
+
     else:
         print('modules available in {}:\n'.format(dir_modules))
         sit.utilities.print_list_cols(module_list)
@@ -79,7 +79,7 @@ def get_mode(expt):
     try:
         selection = sit.utilities.selector_list(mode_list)
         return selection
-    except ValueError as ve:
+    except:
         return None
 
 def get_experiments(check=None):
@@ -355,81 +355,75 @@ def main():
     dir_modules = os.getenv('SCRIPTUIT_MODULES')
 
     # define experiment directory and check permissions
-    print('Thank you for choosing scriptuit!\nSelect experiment:')
+    print('\nSelect experiment:')
     expt = get_loop(get_experiments)
     if expt == 'stop':
         sys.exit()
     if sit.utilities.has_permissions(os.path.join(DIR_DATA, expt)) == False:
         sys.exit("You do not have permission to write in {}".format(os.path.join(DIR_DATA, expt)))
 
-    # get the date and time, current user, f_id, set dir_pipe to be local
-    print('input ID for this run of scriptuit:')
-    ID = raw_input('ID: ')
-    ID = sit.utilities.mangle_string(ID)
-    master = 'master_{}_{}.sh'.format(f_id, ID)
-
-    print('experiment: {}\nselect modality:'.format(expt))
+    print('\nexperiment: {}\nselect modality:'.format(expt))
     mode = get_loop(get_mode, expt)
     if mode == 'stop':
         sys.exit()
 
-    print('modality: {}\ninitializing master script.'.format(mode))
+    # get the date and time, current user, f_id, set dir_pipe to be local
+    print('\nmodality: {}\ninput ID for this run of scriptuit:'.format(mode))
+    ID = raw_input('ID: ')
+    ID = sit.utilities.mangle_string(ID)
+    master = 'master_{}_{}.sh'.format(f_id, ID)
+
+    print('\ninitializing master script.')
     f = open(os.path.join(DIR_DATA, expt, master), 'wb')
-    f.write('#!/bin/bash\n'
-            'set -e\n\n'
-            '# Master scriptuit for {expt}: {mode}.\n'
-            '# Generated: {datetime} by {user}.\n\n'
-            '## Setup\n'
+    f.write('#!/bin/bash\n\n'
+            '# master scriptuit for {expt}: {mode}.\n'
+            '# generated: {datetime} by {user}.\n\n'
             'export DIR_MODULES={dir_modules}\n'
             'export DIR_DATA={dir_data}\n'
             'export DIR_EXPT={expt}\n'
             'export DATA_TYPE={mode}\n'
-            'export ID={ID}\n\n'
-            'export SUBJECTS=$(cat ${{DIR_EXPT}}/subjects.txt)\n\n'
-            '## Pipeline\n'
-            'for SUB in ${{SUBJECTS}}; do\n\n'.format(
+            'export ID={ID}\n\n'.format(
                 dir_modules=dir_modules, dir_data=dir_data, expt=expt,
                 mode=mode, ID=ID, user=user, datetime=datetime))
 
-    p_list = []    # keeps track of our command-list
-    used = []      # keeps track of the modules run
-    output = None  # keeps track of last module's output
-    flag = 0
-    while flag == 0:
-        print('select the next pipeline module:')
-        module, used = get_modules(interactive=True, used=used)
+    p_list = []      # keeps track of our command-list
+    usedModules = [] # keeps track of the modules run
+    outputFiles = [] # keeps track of each module's output
+    flag = False
+
+    while not flag:
+
+        print('\nselect the next pipeline module:')
+        try:
+            module, usedModules = get_modules(interactive=True, used=usedModules)
+        except:
+            continue
+
+        if not module:
+            continue
 
         if module == 'stop':
-            flag = 1
+            flag = True
             continue
-        elif module == None:
-            print('')
-        else:
-            # save the old output
-            bkup = copy(output)
 
-            # parses module, write pipeline commands
-            prereq, output, command = sit.utilities.parse(os.path.join(dir_modules, module), used)
+        # parses module, write pipeline commands
+        try:
+            outputFiles, command = sit.utilities.parse(os.path.join(dir_modules, module), usedModules, outputFiles)
+            p_list = sit.utilities.writer(f, p_list, command)
+        except Exception as err:
+            if len(usedModules) > 0:
+                usedModules.pop() # remove last module from the used list
+            print(err)
+            continue
 
-            # write command to file if successful
-            if command:
-                p_list = sit.utilities.writer(f, p_list, command)
-            else:
-                used.pop()
-                output = copy(bkup)
-
-        # print the current pipeline configuration, ask to continue
-        print('Current pre-processing pipeline:')
+        print('\nCurrent pre-processing pipeline:')
         sit.utilities.print_list(p_list)
         response = raw_input("Type 'stop' to stop, else continue: ")
         if response == 'stop':
-            flag = 1
-
-    # add each subject to the proclist, close the subject loop
-    f.write('\ndone\n')
+            flag = True
 
     # close the file, make executable by owner + group, and execute
-    print('saving master script')
+    print('saving master script: {}'.format(os.path.join(DIR_DATA, expt, master)))
     f.close()
     os.chmod(os.path.join(dir_data, expt, master), 0755)
 
