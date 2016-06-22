@@ -24,7 +24,8 @@ Quickstart:
 + Create a data directory somewhere, and add some data.
 + Set `SCRIPTUIT_DATA` to point to your data folder.
 + Set `SCRIPTUIT_MODULES` to point to a folder containing scriptuit modules.
-+ Generate a script using `scriptuit run`.
++ Generate a master script using `scriptuit generate`.
++ Render a final BASH script using `scriptuit render masterscript output`
 
 Optional:
 
@@ -34,7 +35,7 @@ Introduction
 ------------
 scriptuit platform for developing BASH pipelines with a focus on rapid prototyping and ease of reproducibility. It was designed primarily with the needs of experimental researchers in mind. It is able to intelligently chain together BASH modules with a specially formatted header in any way the user desires to create a script for analysing data.
 
-scriptuit facilitates the construction of scripts that can be run on your computer or in a distributed computing environment by only answering a few high-level questions. Scriptuit can be used to render fully self-contained BASH scripts for portability or further tweaking. In this way, scriptuit acts as your lab notebook, and it's outputs can be shared with collaborators or reviewers.
+scriptuit facilitates the construction of scripts that can be run on your computer or in a distributed computing environment by only answering a few high-level questions. These 'recipes' are stored as compact and easy-to-read master scripts. Scriptuit can be used to render a master script to fully self-contained BASH script for portability or further tweaking. In this way, scriptuit acts as your lab notebook, and it's outputs can be shared with collaborators or reviewers.
 
 Modules
 -------
@@ -65,7 +66,7 @@ scriptuit reads this header in order to ask the user reasonable questions on how
 
 Here's a walk through of the various header components:
 
-**usage** 
+**usage**
 
     # module_name input list_variable float_variable int_variable
 
@@ -80,7 +81,7 @@ This line contains the name of the module (the file name of the module must matc
 
 Here, we see the 4 arguments available in scriptuit.
 
-+ `input` is a special argument in scriptuit. It is automatically filled by the `output` prefix of the previous module. Therefore, any module with an input argument should be a mid-stage module. scriptuit modules that are run at the beginning of the pipelines should not have an `input` argument, and should copy files from the `RUNXX` folder. 
++ `input` is a special argument in scriptuit. It is automatically filled by the `output` prefix of the previous module. Therefore, any module with an input argument should be a mid-stage module. scriptuit modules that are run at the beginning of the pipelines should not have an `input` argument, and should copy files from the `RUNXX` folder.
 
 + `list_variable` is a case where the user should select from a set of pre-defined, or custom, strings. The `[list: x y z ?]` syntax at the end of the line is a space-delimited list of the options to be presented to the user. `?` is a special case, that if selected asks the user to enter a custom string.
 
@@ -88,7 +89,7 @@ Here, we see the 4 arguments available in scriptuit.
 
 + `int_variable` is a case where the user should input a whole number. It is specified by `[int]`.
 
-Each argument in the usage line must have an line under arguments, otherwise the pipeline will fail. 
+Each argument in the usage line must have an line under arguments, otherwise the pipeline will fail.
 
 **flow control**
 
@@ -129,8 +130,8 @@ A module will typically loop through sessions, and then runs, taking an input fi
 
 A well-written module will never try to do anything that has already been done. Therefore, blocks of code should be wrapped in a:
 
-    if [ -f ${input}.${ID}.${run_number}.extension ]; then; 
-        commands 
+    if [ -f ${input}.${ID}.${run_number}.extension ]; then;
+        commands
     fi
 
 loop. This is not mandatory, but highly recommended. It allows one to re-run the pipeline with a few tweaks, and the code will only act on files missing from the output structure.
@@ -171,7 +172,7 @@ The run folders are used to separate data taken at the same time point. For exam
 
 Usage
 -----
-**scriptuit run**
+**scriptuit generate**
 
 This walks you through the construction of a pipeline for a single image modality within a single experiment. The command line interface allows you to chain together modules, keeping track of inputs/outputs, and the prerequisites for each module.
 
@@ -181,18 +182,41 @@ Each run of scriptuit is associated with an `ID`. This allows you to keep differ
 
 This generates a single master script with your modules chained together in order after you issue the stop command. This master script can be used to generate full rendered scripts for each participant, or can be used to analyze your data.
 
+**scriptuit render**
+
+This 'renders' or hard-codes the settings defined in the master script to an output file using the following syntax:
+
+    scriptuit render masterScript output.sh
+
+This script will be completely independent from scriptuit and is therefore a portable pipeline that can be shared with others, or used to process your data.
+
 **scriptuit clean**
 
 Allows you to find and destroy files with a given prefix, for all, or some of your subjects.
 
-**scriptuit help**
+**scriptuit list**
+
+Prints a list of the modules found in `SCRIPTUIT_MODULES`.
+
+**scriptuit help modulename**
 
 Prints the help for the selected module.
+
+**scriptuit check setup**
+
+Checks your installation paths for errors, and reports on any misconfiguration.
+
+**scriptuit check inputs**
+
+Checks your `SCRIPTUIT_DATA` folder for errors in folder structure and missing input files.
 
 **sit-folder**
 
 This simple tool will help you generate folders properly-formatted for scriptuit. It is run on a per-subject basis, but a clever user could manually duplicate a single folder structure for as many participants as needed. These folders will automatically be generated in the designated working directory.
 
-**epi-queue**
+**sit-queue**
 
-scriptuit can be used to generate a `proclist`, a list of the rendered scripts for each participant. This proclist can be run manually, if desired, but can also be submitted to a queue.
+This can be used to submit your rendered script to a queue system for a defined set of subjects:
+
+    sit-queue script subjectList queneName
+
