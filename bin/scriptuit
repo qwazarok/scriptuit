@@ -4,13 +4,13 @@
     _) (_ |  | |_) |_ |_| | |_  | github.com/josephdviviano/scriptuit
                |                |
 
-    scriptuit list        -- prints a list of all available modules
-    scriptuit help module -- prints help for module
-    scriptuit check       -- checks installation
-    scriptuit verify      -- checks input files for experiment
-    scriptuit generate    -- produce master script
-    scriptuit render      -- render master script
-    scriptuit clean       -- delete outputs
+    scriptuit list                 -- lists all available modules
+    scriptuit help module          -- prints help for module
+    scriptuit check setup          -- checks installation
+    scriptuit check inputs         -- checks input files for experiment
+    scriptuit generate             -- generate master script
+    scriptuit render script output -- render master script to output script
+    scriptuit clean                -- delete output files
 """
 import os, sys, stat
 from copy import copy
@@ -26,12 +26,11 @@ def get_modules(interactive=False, used=None):
     Prints the available modules. If provided with a list of 'used' modules,
     these are stripped from the output.
     """
-    dir_modules = os.getenv('SCRIPTUIT_MODULES')
-    if not dir_modules:
+    if not DIR_MODULES:
         sys.exit('ERROR: Environment variable SCRIPTUIT_MODULES not defined.')
 
-    module_list = [f for f in os.listdir(dir_modules)
-                           if os.path.isfile(os.path.join(dir_modules, f))]
+    module_list = [f for f in os.listdir(DIR_MODULES)
+                           if os.path.isfile(os.path.join(DIR_MODULES, f))]
     module_list.sort()
 
     # remove used modules from list
@@ -52,7 +51,7 @@ def get_modules(interactive=False, used=None):
             raise ValueError('ERROR: Invalid selection')
 
     else:
-        print('modules available in {}:\n'.format(dir_modules))
+        print('modules available in {}:\n'.format(DIR_MODULES))
         sit.utilities.print_list_cols(module_list)
 
 def get_mode(expt):
@@ -60,9 +59,7 @@ def get_mode(expt):
     Prints the available image modalities. Optionally prompts the user to
     select one.
     """
-    dir_data = os.getenv('SCRIPTUIT_DATA')
-
-    if not dir_data:
+    if not DIR_DATA:
         sys.exit('ERROR: Environment variable SCRIPTUIT_DATA not defined.')
 
     # get a sorted list of the experiments
@@ -88,13 +85,12 @@ def get_experiments(check=None):
     Prints the available experiments. Optionally prompts the user to select
     one.
     """
-    dir_data = os.getenv('SCRIPTUIT_DATA')
-    if sit.utilities.has_permissions(dir_data) == False:
-        sys.exit('ERROR: You do not have write permission to {}'.format(dir_data))
+    if sit.utilities.has_permissions(DIR_DATA) == False:
+        sys.exit('ERROR: You do not have write permission to {}'.format(DIR_DATA))
 
     # get a sorted list of the experiments
-    expt_list = [d for d in os.listdir(dir_data)
-                         if os.path.isdir(os.path.join(dir_data, d))]
+    expt_list = [d for d in os.listdir(DIR_DATA)
+                         if os.path.isdir(os.path.join(DIR_DATA, d))]
 
     try:
         selection = sit.utilities.selector_list(expt_list)
@@ -113,8 +109,7 @@ def get_help(module):
     """
     Prints the module header line by line, wrapping long sections.
     """
-    dir_modules = os.getenv('SCRIPTUIT_MODULES')
-    f = open(os.path.join(dir_modules, module))
+    f = open(os.path.join(DIR_MODULES, module))
     helpfile = f.readlines()
 
     for line in helpfile:
@@ -132,27 +127,25 @@ def check_environment(mode='verbose'):
     """
     Checks manditory environent variables and exits if they defined improperly.
     """
-    dir_modules = os.getenv('SCRIPTUIT_MODULES')
-    dir_data = os.getenv('SCRIPTUIT_DATA')
 
-    if dir_data == None:
+    if DIR_DATA == None:
         sys.exit('ERROR: SCRIPTUIT_DATA variable is not set.')
-    if os.path.isdir(dir_data) == False:
-        sys.exit('ERROR: scriptuit data directory does not exist: {}'.format(dir_data))
-    if sit.utilities.has_permissions(dir_data) == False:
-        sys.exit("ERROR: no write permissions for {}".format(dir_data))
+    if os.path.isdir(DIR_DATA) == False:
+        sys.exit('ERROR: scriptuit data directory does not exist: {}'.format(DIR_DATA))
+    if sit.utilities.has_permissions(DIR_DATA) == False:
+        sys.exit("ERROR: no write permissions for {}".format(DIR_DATA))
 
-    if dir_modules == None:
+    if DIR_MODULES == None:
         sys.exit('ERROR: SCRIPTUIT_MODULES variable is not set')
-    if os.path.isdir(dir_modules) == False:
-        sys.exit('ERROR: scriptuit modules directory does not exist: {}'.format(dir_modules))
+    if os.path.isdir(DIR_MODULES) == False:
+        sys.exit('ERROR: scriptuit modules directory does not exist: {}'.format(DIR_MODULES))
 
     # format uses global variables defined at top of scriptuit
     if mode == 'verbose':
         print('scriptuit configuration:\n'
-              '    data directory   : {dir_data}\n'
-              '    module directory : {dir_modules}\n'.format(
-                                       dir_data=dir_data, dir_modules=dir_modules))
+              '    data directory   : {DIR_DATA}\n'
+              '    module directory : {DIR_MODULES}\n'.format(
+                                       DIR_DATA=DIR_DATA, DIR_MODULES=DIR_MODULES))
 
 def check_run(expt, subj, mode, sess, run):
     """
@@ -161,10 +154,8 @@ def check_run(expt, subj, mode, sess, run):
     Usage:
         truth = check_run(experiment, subject, image modality, session, run)
     """
-    dir_data = os.getenv('SCRIPTUIT_DATA')
-
     # retrieve the number of files within each run folder
-    dir_file = os.path.join(dir_data, expt, subj, mode, sess, run)
+    dir_file = os.path.join(DIR_DATA, expt, subj, mode, sess, run)
     file_list = [d for d in os.listdir(dir_file)
                          if os.path.isfile(os.path.join(dir_file, d))]
 
@@ -180,10 +171,9 @@ def check_mode(expt, subj, mode):
     folders with missing data.
     """
     n_runs = 0
-    dir_data = os.getenv('SCRIPTUIT_DATA')
 
     # retrieve the sessions for a given image modality
-    dir_mode = os.path.join(dir_data, expt, subj, mode)
+    dir_mode = os.path.join(DIR_DATA, expt, subj, mode)
     sess_list = [d for d in os.listdir(dir_mode)
                          if os.path.isdir(os.path.join(dir_mode, d))]
 
@@ -213,14 +203,12 @@ def check_directories(expt):
     This checks the image modalities for each subject in an experiment. It also
     reports the number of subjects with each kind of image modality.
     """
-    dir_data = os.getenv('SCRIPTUIT_DATA')
-
-    if sit.utilities.has_permissions(os.path.join(dir_data, expt)) == False:
+    if sit.utilities.has_permissions(os.path.join(DIR_DATA, expt)) == False:
         sys.exit('ERROR: you do not have permissions to edit this experiment.')
 
     # attempt to access the subjects for a given experiment
     try:
-        subjects = sit.utilities.get_subj(os.path.join(dir_data, expt))
+        subjects = sit.utilities.get_subj(os.path.join(DIR_DATA, expt))
     except:
         print('ERROR: experiment path is incorrect {}'.format(expt))
 
@@ -231,7 +219,7 @@ def check_directories(expt):
     for subj in subjects:
 
         # retrieve the image modalities for a given subject
-        dir_subj = os.path.join(dir_data, expt, subj)
+        dir_subj = os.path.join(DIR_DATA, expt, subj)
         mode_list = [d for d in os.listdir(dir_subj)
                              if os.path.isdir(os.path.join(dir_subj, d))]
 
@@ -264,7 +252,6 @@ def cleanup():
     """
     Removes stages of a scriptuit pipeline.
     """
-    dir_data = os.getenv('SCRIPTUIT_DATA')
     sit.utilities.check_os()
 
     print('scriptuit cleanup: this deletes data.')
@@ -287,7 +274,7 @@ def cleanup():
     elif decision == 'some':
         flag = 0
         subjects = []
-        subj_list = sit.utilities.get_subj(os.path.join(dir_data, expt))
+        subj_list = sit.utilities.get_subj(os.path.join(DIR_DATA, expt))
 
         while flag == 0:
             print("select subject to cleanup. type 'stop' to stop.")
@@ -303,14 +290,14 @@ def cleanup():
             sit.utilities.print_list(subjects)
 
     elif decision == 'all':
-        subjects = sit.utilities.get_subj(os.path.join(dir_data, expt))
+        subjects = sit.utilities.get_subj(os.path.join(DIR_DATA, expt))
         print('All subjects slated for cleanup.')
 
     # get all files with given pattern
     print("Input target file-name pattern to delete (e.g., '.txt'):")
     extension = raw_input('extension: ')
     fnames = [x for x in sit.utilities.find_files(
-                 os.path.join(dir_data, expt), extension, exclude='RUN', level=3)][0]
+                 os.path.join(DIR_DATA, expt), extension, exclude='RUN', level=3)][0]
     prefixes = []
 
     for f in fnames:
@@ -339,28 +326,88 @@ def cleanup():
     # loop through subjects, removing specified files in the selected modality
     for prefix in remove:
         for subj in subjects:
-            print(os.path.join(dir_data, expt, subj, mode))
+            print(os.path.join(DIR_DATA, expt, subj, mode))
             to_remove = [x for x in sit.utilities.find_files(
-                 os.path.join(dir_data, expt, subj, mode), prefix, exclude='RUN', level=2)][0]
+                 os.path.join(DIR_DATA, expt, subj, mode), prefix, exclude='RUN', level=2)][0]
             print(to_remove)
             #purge(to_remove)
 
-def render(script):
+def render(script, output):
     """
     Renders the submitted master script.
     """
     sit.utilities.check_os()
     check_environment('quiet')
     datetime, user, f_id = sit.utilities.get_date_user()
-    dir_data = os.getenv('SCRIPTUIT_DATA')
-    dir_modules = os.getenv('SCRIPTUIT_MODULES')
 
     # read in master script
-    data = [line.rstrip() for line in open(script, 'wb')]
+    masterData = [line.replace('=', ' ').rstrip() for line in open(script, 'rb')]
 
-    # verify this is formatted properly
-    for line in data:
+    # verify input script is formatted properly
+    try:
+        assert sit.utilities.get_line(masterData, 'DIR_MODULES'), 'ERROR: DIR_MODULES not defined.'
+        assert sit.utilities.get_line(masterData, 'DIR_DATA'), 'ERROR: DIR_DATA not defined.'
+        assert sit.utilities.get_line(masterData, 'DIR_EXPT'), 'ERROR: DIR_EXPT not defined.'
+        assert sit.utilities.get_line(masterData, 'DATA_TYPE'), 'ERROR: DATA_TYPE not defined.'
+        assert sit.utilities.get_line(masterData, 'ID'), 'ERROR: ID not defined.'
+    except AssertionError as err:
+        sys.exit(err)
 
+    # verify we have at least one module defined that is also in DIR_MODULES
+    moduleList = [f for f in os.listdir(DIR_MODULES)
+                           if os.path.isfile(os.path.join(DIR_MODULES, f))]
+    moduleList.sort()
+    foundModules = []
+    for m in moduleList:
+        t = sit.utilities.get_line(masterData, m)
+        if t:
+            foundModules.append(m)
+        else:
+            pass
+
+    if len(foundModules) == 0:
+        sys.exit('ERROR: No modules in {} are defined in {}'.format(DIR_MODULES, script))
+
+    # initalize the output script
+    print('rendering master script {} to output {}'.format(script, output))
+    f = open(output, 'wb')
+    f.write('#!/bin/bash\n\n'
+            '# rendered scriptuit from {script}\n'
+            '# generated: {datetime} by {user}.\n\n'
+            'export DIR_MODULES={DIR_MODULES}\n'
+            'export DIR_DATA={DIR_DATA}\n'
+            'export DIR_EXPT={DIR_EXPT}\n'
+            'export DATA_TYPE={DATA_TYPE}\n'
+            'export ID={ID}\n'
+            'export SUB=${{1}}\n'.format(
+                script=script,
+                user=user,
+                datetime=datetime,
+                DIR_MODULES=sit.utilities.get_line(masterData, 'DIR_MODULES')[0],
+                DIR_DATA=sit.utilities.get_line(masterData, 'DIR_DATA')[0],
+                DIR_EXPT=sit.utilities.get_line(masterData, 'DIR_EXPT')[0],
+                DATA_TYPE=sit.utilities.get_line(masterData, 'DATA_TYPE')[0],
+                ID=sit.utilities.get_line(masterData, 'ID')[0]))
+
+    # now, copy the contents of each scriptuit module to output, sans header
+    for line in masterData:
+        moduleBody = None # default value, if no module is found
+
+        for module in foundModules:
+           if line.startswith(module):
+
+                # get module body (strip header)
+                moduleBody = sit.utilities.get_body(os.path.join(DIR_MODULES, module))
+
+                # hard code command-line variables
+                moduleBody = sit.utilities.get_rendered_module(moduleBody, line)
+                break
+
+        if moduleBody:
+            f.writelines(moduleBody)
+
+    f.close()
+    os.chmod(output, 0755)
 
 def generate():
     """
@@ -369,8 +416,6 @@ def generate():
     sit.utilities.check_os()
     check_environment('quiet')
     datetime, user, f_id = sit.utilities.get_date_user()
-    dir_data = os.getenv('SCRIPTUIT_DATA')
-    dir_modules = os.getenv('SCRIPTUIT_MODULES')
 
     # define experiment directory and check permissions
     print('\nSelect experiment:')
@@ -396,12 +441,12 @@ def generate():
     f.write('#!/bin/bash\n\n'
             '# master scriptuit for {expt}: {mode}.\n'
             '# generated: {datetime} by {user}.\n\n'
-            'DIR_MODULES={dir_modules}\n'
-            'DIR_DATA={dir_data}\n'
+            'DIR_MODULES={DIR_MODULES}\n'
+            'DIR_DATA={DIR_DATA}\n'
             'DIR_EXPT={expt}\n'
             'DATA_TYPE={mode}\n'
             'ID={ID}\n\n'.format(
-                dir_modules=dir_modules, dir_data=dir_data, expt=expt,
+                DIR_MODULES=DIR_MODULES, DIR_DATA=DIR_DATA, expt=expt,
                 mode=mode, ID=ID, user=user, datetime=datetime))
 
     p_list = []      # keeps track of our command-list
@@ -426,7 +471,7 @@ def generate():
 
         # parses module, write pipeline commands
         try:
-            outputFiles, command = sit.utilities.parse(os.path.join(dir_modules, module), usedModules, outputFiles)
+            outputFiles, command = sit.utilities.parse(os.path.join(DIR_MODULES, module), usedModules, outputFiles)
             p_list = sit.utilities.writer(f, p_list, command)
         except Exception as err:
             if len(usedModules) > 0:
@@ -443,26 +488,24 @@ def generate():
     # close the file, make executable by owner + group, and execute
     print('saving master script: {}'.format(os.path.join(DIR_DATA, expt, master)))
     f.close()
-    os.chmod(os.path.join(dir_data, expt, master), 0755)
+    os.chmod(os.path.join(DIR_DATA, expt, master), 0755)
 
 if __name__ == "__main__":
 
-    # print help for the defined module
-    if len(sys.argv) == 3 and sys.argv[1] == 'help':
-        get_help(sys.argv[2])
-    elif len(sys.argv) == 2 and sys.argv[1] == 'list':
+    if len(sys.argv) == 2 and sys.argv[1] == 'list':
         get_modules()
-    elif len(sys.argv) == 2 and sys.argv[1] == 'verify':
-        print('Please specify an experiment.')
-        get_experiments(check='check')
-    elif len(sys.argv) == 2 and sys.argv[1] == 'check':
+    elif len(sys.argv) == 3 and sys.argv[1] == 'help':
+        get_help(sys.argv[2])
+    elif len(sys.argv) == 3 and sys.argv[1] == 'check' and sys.argv[3] == 'setup':
         check_environment('verbose')
-    elif len(sys.argv) == 2 and sys.argv[1] == 'clean':
-        cleanup()
+    elif len(sys.argv) == 3 and sys.argv[1] == 'check' and sys.argv[2] == 'inputs':
+        get_experiments(check='check')
     elif len(sys.argv) == 2 and sys.argv[1] == 'generate':
         generate()
-    elif len(sys.argv) == 3 and sys.argv[1] == 'render':
-        render(sys.argv[2])
+    elif len(sys.argv) == 4 and sys.argv[1] == 'render':
+        render(sys.argv[2], sys.argv[3])
+    elif len(sys.argv) == 2 and sys.argv[1] == 'clean':
+        cleanup()
     else:
         print(__doc__)
 

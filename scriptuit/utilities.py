@@ -251,6 +251,36 @@ def get_header(filename):
 
     return header
 
+def get_body(filename):
+    """
+    Returns each line of the module body as a list.
+    """
+    body = []
+    header = True
+
+    f = open(filename, 'rb')
+
+    for i, l in enumerate(f.readlines()):
+
+        # check for shebang
+        if i == 0:
+            if not l.startswith('#!/bin/bash'):
+                raise SyntaxError('ERROR: module {} does not contain BASH shebang'.format(filename))
+
+        # skip header
+        if header:
+            if l[0] == '#':
+                continue
+            else:
+                body.append(l)
+                header = False
+                continue
+
+        body.append(l)
+        #body.append(l.rstrip('\n').strip())
+
+    return body
+
 def get_opts(header, args):
     """
     Returns the options for the module as a list.
@@ -271,7 +301,7 @@ def get_opts(header, args):
 
 def get_line(header, pattern):
     """
-    Finds a line of the header starting with the defined pattern. Returns
+    Finds a entry in a list starting with the defined pattern. Returns
     everything else on that line as a list. Removes all empty values, if none
     are found, returns None.
     """
@@ -286,6 +316,31 @@ def get_line(header, pattern):
                 return None
             else:
                 return(h)
+
+def get_rendered_module(moduleBody, line):
+    """
+    Takes the moduleBody list (obtained with get_body()) and the matching line
+    from the master script to fill in all command-line arguments. This 'hard-
+    codes' the rendered script.
+    """
+    for i, arg in enumerate(line.split(' ')):
+        if i == 0:
+            continue
+
+        # find reference to BASH-format command line argument e.g., ${1} or $1
+        regex1 = re.compile('\$\{' + str(i) + '\}')
+        regex2 = re.compile('\$' + str(i))
+        for j, moduleLine in enumerate(moduleBody):
+            if regex1.search(moduleLine):
+                moduleBody[j] = moduleLine.replace('${' + str(i) + '}', arg)
+                break
+            elif regex2.search(moduleLine):
+                moduleBody[j] = moduleLine.replace('$' + str(i), arg)
+                break
+            else:
+                pass
+
+    return moduleBody
 
 def check_match(a, b):
     """
