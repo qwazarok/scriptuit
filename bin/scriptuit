@@ -8,7 +8,8 @@
     scriptuit help module -- prints help for module
     scriptuit check       -- checks installation
     scriptuit verify      -- checks input files for experiment
-    scriptuit run         -- produce scripts
+    scriptuit generate    -- produce master script
+    scriptuit render      -- render master script
     scriptuit clean       -- delete outputs
 """
 import os, sys, stat
@@ -344,9 +345,26 @@ def cleanup():
             print(to_remove)
             #purge(to_remove)
 
-def main():
+def render(script):
     """
-    Runs the pipeline generator.
+    Renders the submitted master script.
+    """
+    sit.utilities.check_os()
+    check_environment('quiet')
+    datetime, user, f_id = sit.utilities.get_date_user()
+    dir_data = os.getenv('SCRIPTUIT_DATA')
+    dir_modules = os.getenv('SCRIPTUIT_MODULES')
+
+    # read in master script
+    data = [line.rstrip() for line in open(script, 'wb')]
+
+    # verify this is formatted properly
+    for line in data:
+
+
+def generate():
+    """
+    Runs the master script generator.
     """
     sit.utilities.check_os()
     check_environment('quiet')
@@ -378,11 +396,11 @@ def main():
     f.write('#!/bin/bash\n\n'
             '# master scriptuit for {expt}: {mode}.\n'
             '# generated: {datetime} by {user}.\n\n'
-            'export DIR_MODULES={dir_modules}\n'
-            'export DIR_DATA={dir_data}\n'
-            'export DIR_EXPT={expt}\n'
-            'export DATA_TYPE={mode}\n'
-            'export ID={ID}\n\n'.format(
+            'DIR_MODULES={dir_modules}\n'
+            'DIR_DATA={dir_data}\n'
+            'DIR_EXPT={expt}\n'
+            'DATA_TYPE={mode}\n'
+            'ID={ID}\n\n'.format(
                 dir_modules=dir_modules, dir_data=dir_data, expt=expt,
                 mode=mode, ID=ID, user=user, datetime=datetime))
 
@@ -441,8 +459,10 @@ if __name__ == "__main__":
         check_environment('verbose')
     elif len(sys.argv) == 2 and sys.argv[1] == 'clean':
         cleanup()
-    elif len(sys.argv) == 2 and sys.argv[1] == 'run':
-        main()
+    elif len(sys.argv) == 2 and sys.argv[1] == 'generate':
+        generate()
+    elif len(sys.argv) == 3 and sys.argv[1] == 'render':
+        render(sys.argv[2])
     else:
         print(__doc__)
 
