@@ -20,7 +20,7 @@ import textwrap
 
 DIR_DATA = os.getenv('SCRIPTUIT_DATA')
 DIR_MODULES = os.getenv('SCRIPTUIT_MODULES')
-
+CLEARSCREEN = chr(27) + "[2J"
 def get_modules(interactive=False, used=None):
     """
     Prints the available modules. If provided with a list of 'used' modules,
@@ -359,11 +359,9 @@ def render(script, output):
     moduleList.sort()
     foundModules = []
     for m in moduleList:
-        t = sit.utilities.get_line(masterData, m)
-        if t:
-            foundModules.append(m)
-        else:
-            pass
+        for line in masterData:
+            if line.split(' ')[0] == m:
+                foundModules.append(m)
 
     if len(foundModules) == 0:
         sys.exit('ERROR: No modules in {} are defined in {}'.format(DIR_MODULES, script))
@@ -394,7 +392,7 @@ def render(script, output):
         moduleBody = None # default value, if no module is found
 
         for module in foundModules:
-           if line.startswith(module):
+            if line.startswith(module):
 
                 # get module body (strip header)
                 moduleBody = sit.utilities.get_body(os.path.join(DIR_MODULES, module))
@@ -476,6 +474,7 @@ def generate():
         except Exception as err:
             if len(usedModules) > 0:
                 usedModules.pop() # remove last module from the used list
+            print(CLEARSCREEN)
             print(err)
             continue
 
@@ -484,6 +483,7 @@ def generate():
         response = raw_input("Type 'stop' to stop, else continue: ")
         if response == 'stop':
             flag = True
+        print(CLEARSCREEN)
 
     # close the file, make executable by owner + group, and execute
     print('saving master script: {}'.format(os.path.join(DIR_DATA, expt, master)))
