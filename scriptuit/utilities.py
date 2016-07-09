@@ -429,16 +429,16 @@ def parse(module, usedModules=[], outputFiles=[], verbose=False):
         command = '{} {}'.format(moduleName, inputFile)
 
     if options:
-        # loop through options dictionary and build up command line
-        for opt in options.keys():
+        # loop through options list and build up command line
+        for opt in options:
 
-            print('\n{}: {}'.format(opt, ' '.join(get_line(header, '{}:'.format(opt)))))
+            print('\n{}: {}'.format(opt[0], ' '.join(get_line(header, '{}:'.format(opt[0])))))
 
-            if options[opt].startswith('list'):
-                response = selector_list(options[opt].split(':')[1].strip().split(' '))
-            elif options[opt].startswith('float'):
+            if opt[1].startswith('list'):
+                response = selector_list(opt[1].split(':')[1].strip().split(' '))
+            elif opt[1].startswith('float'):
                 response = selector_float()
-            elif options[opt].startswith('int'):
+            elif opt[1].startswith('int'):
                 response = selector_int()
             else:
                 raise SyntaxError('ERROR: malformed option found in module {} header.'.format(moduleName))
