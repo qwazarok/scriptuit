@@ -283,11 +283,11 @@ def get_body(filename):
 
 def get_opts(header, args):
     """
-    Returns the options for the module as a list.
+    Returns the options for the module as a list of lists.
     The options are found in square brackets in-line with each option, e.g.,
     n_repeats    Number of times to repeat operation on input [int]
     """
-    options = {}
+    options = []
     if not args:
         return None
 
@@ -297,7 +297,7 @@ def get_opts(header, args):
                                and x.count(']') == 1, header)
         if len(optline) == 1:
             opt = optline[0].split('[')[1].split(']')[0]
-            options[arg] = opt
+            options.append([arg, opt])
 
     return options
 
