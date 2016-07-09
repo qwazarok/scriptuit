@@ -288,6 +288,8 @@ def get_opts(header, args):
     n_repeats    Number of times to repeat operation on input [int]
     """
     options = {}
+    if not args:
+        return None
 
     for arg in args:
         optline = filter(lambda x: x.split(' ')[0] == '{}:'.format(arg)
@@ -391,10 +393,15 @@ def parse(module, usedModules=[], outputFiles=[], verbose=False):
         for h in header:
             print(h)
 
-    n_inputs = len(filter(lambda x: 'input' == x.lower(), args))
+    if args:
+        n_inputs = len(filter(lambda x: 'input' == x.lower(), args))
+    else:
+        n_inputs = 0
+
     if output:
         assert len(output) == 1, 'ERROR: More than one output defined for {}'.format(moduleName)
     inputFile = None # useless default value ... to remove?
+
     if prereq:
         try:
             check_prerequisites(prereq, usedModules)
@@ -421,24 +428,25 @@ def parse(module, usedModules=[], outputFiles=[], verbose=False):
     else:
         command = '{} {}'.format(moduleName, inputFile)
 
-    # loop through options dictionary and build up command line
-    for opt in options.keys():
+    if options:
+        # loop through options dictionary and build up command line
+        for opt in options.keys():
 
-        print('\n{}: {}'.format(opt, ' '.join(get_line(header, '{}:'.format(opt)))))
+            print('\n{}: {}'.format(opt, ' '.join(get_line(header, '{}:'.format(opt)))))
 
-        if options[opt].startswith('list'):
-            response = selector_list(options[opt].split(':')[1].strip().split(' '))
-        elif options[opt].startswith('float'):
-            response = selector_float()
-        elif options[opt].startswith('int'):
-            response = selector_int()
-        else:
-            raise SyntaxError('ERROR: malformed option found in module {} header.'.format(moduleName))
+            if options[opt].startswith('list'):
+                response = selector_list(options[opt].split(':')[1].strip().split(' '))
+            elif options[opt].startswith('float'):
+                response = selector_float()
+            elif options[opt].startswith('int'):
+                response = selector_int()
+            else:
+                raise SyntaxError('ERROR: malformed option found in module {} header.'.format(moduleName))
 
-        if response:
-            command = '{} {}'.format(command, response)
-        else:
-            raise ValueError
+            if response:
+                command = '{} {}'.format(command, response)
+            else:
+                raise ValueError
 
     # append output file name to list
     if output:
