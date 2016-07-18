@@ -21,6 +21,7 @@ import textwrap
 DIR_DATA = os.getenv('SCRIPTUIT_DATA')
 DIR_MODULES = os.getenv('SCRIPTUIT_MODULES')
 CLEARSCREEN = chr(27) + "[2J"
+
 def get_modules(interactive=False, used=None):
     """
     Prints the available modules. If provided with a list of 'used' modules,
@@ -248,98 +249,11 @@ def get_loop(function, *args):
         var = function(*args)
     return var
 
-def cleanup():
+def parse_master(script):
     """
-    Removes stages of a scriptuit pipeline.
+    Parses submitted master script and checks formatting. Exits if any problems
+    are found.
     """
-    sit.utilities.check_os()
-
-    print('scriptuit cleanup: this deletes data.')
-    expt = get_loop(get_experiments)
-    if expt == 'stop':
-        sys.exit()
-
-    print('experiment: {}. select image modality.'.format(expt))
-    mode = get_loop(get_mode, expt)
-    if mode == 'stop':
-        sys.exit()
-
-    # get the subjects
-    print('cleanup all subjects, or some?')
-    decision = get_loop(sit.utilities.selector_list, ['all', 'some'])
-
-    if decision == 'stop':
-        sys.exit()
-
-    elif decision == 'some':
-        flag = 0
-        subjects = []
-        subj_list = sit.utilities.get_subj(os.path.join(DIR_DATA, expt))
-
-        while flag == 0:
-            print("select subject to cleanup. type 'stop' to stop.")
-            subj = get_loop(sit.utilities.selector_list, subj_list)
-
-            if subj == 'stop':
-                flag = 1
-                continue
-
-            subjects.append(subj)
-            subj_list.remove(subj)
-            print('The following subjects are slated for cleanup:\n')
-            sit.utilities.print_list(subjects)
-
-    elif decision == 'all':
-        subjects = sit.utilities.get_subj(os.path.join(DIR_DATA, expt))
-        print('All subjects slated for cleanup.')
-
-    # get all files with given pattern
-    print("Input target file-name pattern to delete (e.g., '.txt'):")
-    extension = raw_input('extension: ')
-    fnames = [x for x in sit.utilities.find_files(
-                 os.path.join(DIR_DATA, expt), extension, exclude='RUN', level=3)][0]
-    prefixes = []
-
-    for f in fnames:
-        prefixes.append(os.path.basename(f).split('.')[0])
-
-    prefixes = (list(set(prefixes)))
-    prefixes.sort()
-
-    # pick files by their prefix to remove
-    remove = []
-    flag = 0
-    while flag == 0:
-        print("Select file types to remove. Type 'stop' to stop.")
-        prefix = get_loop(sit.utilities.selector_list, prefixes)
-
-        if prefix == 'stop':
-            flag = 1
-            continue
-
-        remove.append(prefix)
-        prefixes.remove(prefix)
-
-    print('The following file types are slated to be removed:\n')
-    sit.utilities.print_list(remove)
-
-    # loop through subjects, removing specified files in the selected modality
-    for prefix in remove:
-        for subj in subjects:
-            print(os.path.join(DIR_DATA, expt, subj, mode))
-            to_remove = [x for x in sit.utilities.find_files(
-                 os.path.join(DIR_DATA, expt, subj, mode), prefix, exclude='RUN', level=2)][0]
-            print(to_remove)
-            #purge(to_remove)
-
-def render(script, output):
-    """
-    Renders the submitted master script.
-    """
-    sit.utilities.check_os()
-    check_environment('quiet')
-    datetime, user, f_id = sit.utilities.get_date_user()
-
     # read in master script
     masterData = [line.replace('=', ' ').rstrip() for line in open(script, 'rb')]
 
@@ -356,15 +270,105 @@ def render(script, output):
     # verify we have at least one module defined that is also in DIR_MODULES
     moduleList = [f for f in os.listdir(DIR_MODULES)
                            if os.path.isfile(os.path.join(DIR_MODULES, f))]
+
+    # return the modules defined in the master script that are ALSO in the
+    # SCRIPTUIT_MODULES folder
     moduleList.sort()
     foundModules = []
-    for m in moduleList:
-        for line in masterData:
+    for line in masterData:
+        for m in moduleList:
             if line.split(' ')[0] == m:
                 foundModules.append(m)
 
     if len(foundModules) == 0:
         sys.exit('ERROR: No modules in {} are defined in {}'.format(DIR_MODULES, script))
+
+    return masterData, foundModules
+
+def clean(script):
+    """
+    Removes stages of a scriptuit pipeline.
+    """
+    sit.utilities.check_os()
+    check_environment('quiet')
+    masterData, foundModules = parse_master(script)
+
+    DIR_MODULES = sit.utilities.get_line(masterData, 'DIR_MODULES')[0]
+    DIR_DATA = sit.utilities.get_line(masterData, 'DIR_DATA')[0]
+    expt = sit.utilities.get_line(masterData, 'DIR_EXPT')[0]
+    mode = sit.utilities.get_line(masterData, 'DATA_TYPE')[0]
+    #ID = sit.utilities.get_line(masterData, 'ID')[0] # ignore ID for now, ID to depricate?
+
+    print('scriptuit clean: this deletes data.')
+
+    # get the subjects
+    print('clean all subjects, or some?')
+    decision = get_loop(sit.utilities.selector_list, ['all', 'some'])
+
+    if decision == 'stop':
+        sys.exit()
+
+    elif decision == 'some':
+        flag = 0
+        subjects = []
+        subj_list = sit.utilities.get_subj(os.path.join(DIR_DATA, expt))
+
+        while flag == 0:
+            print("select subject to clean. type 'stop' to stop.")
+            subj = get_loop(sit.utilities.selector_list, subj_list)
+
+            if subj == 'stop':
+                flag = 1
+                continue
+
+            subjects.append(subj)
+            subj_list.remove(subj)
+            print('the following subjects are slated for clean:\n')
+            sit.utilities.print_list(subjects)
+
+    elif decision == 'all':
+        subjects = sit.utilities.get_subj(os.path.join(DIR_DATA, expt))
+        print('all subjects slated for clean.')
+
+    # select cutoff module
+    print('select cutoff module. the outputs of this module and all downstream modules will be removed.')
+    cutoff = sit.utilities.selector_list(foundModules, sort=False)
+    modules = foundModules[foundModules.index(cutoff):]
+
+    remove = []
+    for module in modules:
+        # parse header, get list of prefixes to remove
+        header  = sit.utilities.get_header(os.path.join(DIR_MODULES, module))
+        output  = sit.utilities.get_line(header, 'output:')
+        others  = sit.utilities.get_line(header, 'others:')
+
+        if output:
+            remove.append(output[0])
+        if others:
+            remove.extend(others)
+
+    print(remove)
+    remove = (list(set(remove))) # not sure if i need this any longer...
+    remove.sort()
+
+    print('The following file types are slated to be removed:\n')
+    sit.utilities.print_list(remove)
+
+    # loop through subjects, removing specified files in the selected modality
+    for prefix in remove:
+        for subj in subjects:
+            to_remove = [x for x in sit.utilities.find_files(
+                 os.path.join(DIR_DATA, expt, subj, mode), prefix, exclude='RUN', level=2)][0]
+            sit.utilities.purge(to_remove)
+
+def render(script, output):
+    """
+    Renders the submitted master script.
+    """
+    sit.utilities.check_os()
+    check_environment('quiet')
+    datetime, user, f_id = sit.utilities.get_date_user()
+    masterData, foundModules = parse_master(script)
 
     # initalize the output script
     print('rendering master script {} to output {}'.format(script, output))
@@ -372,12 +376,18 @@ def render(script, output):
     f.write('#!/bin/bash\n\n'
             '# rendered scriptuit from {script}\n'
             '# generated: {datetime} by {user}.\n\n'
+            'set -e\n\n'
             'export DIR_MODULES={DIR_MODULES}\n'
             'export DIR_DATA={DIR_DATA}\n'
             'export DIR_EXPT={DIR_EXPT}\n'
             'export DATA_TYPE={DATA_TYPE}\n'
             'export ID={ID}\n'
-            'export SUB=${{1}}\n'.format(
+            'export SUB=${{1}}\n\n'
+            'if [ -z ${{1}} ]; then\n'
+            '    echo "Usage:"\n'
+            '    echo "    $(basename ${{0}}) subject"\n'
+            '    exit 1\n'
+            'fi\n'.format(
                 script=script,
                 user=user,
                 datetime=datetime,
@@ -388,10 +398,9 @@ def render(script, output):
                 ID=sit.utilities.get_line(masterData, 'ID')[0]))
 
     # now, copy the contents of each scriptuit module to output, sans header
-    for line in masterData:
-        moduleBody = None # default value, if no module is found
-
-        for module in foundModules:
+    for module in foundModules:
+        for line in masterData:
+            moduleBody = None # default value, if no module is found
             if line.startswith(module):
 
                 # get module body (strip header)
@@ -496,7 +505,7 @@ if __name__ == "__main__":
         get_modules()
     elif len(sys.argv) == 3 and sys.argv[1] == 'help':
         get_help(sys.argv[2])
-    elif len(sys.argv) == 3 and sys.argv[1] == 'check' and sys.argv[3] == 'setup':
+    elif len(sys.argv) == 3 and sys.argv[1] == 'check' and sys.argv[2] == 'setup':
         check_environment('verbose')
     elif len(sys.argv) == 3 and sys.argv[1] == 'check' and sys.argv[2] == 'inputs':
         get_experiments(check='check')
@@ -504,8 +513,8 @@ if __name__ == "__main__":
         generate()
     elif len(sys.argv) == 4 and sys.argv[1] == 'render':
         render(sys.argv[2], sys.argv[3])
-    elif len(sys.argv) == 2 and sys.argv[1] == 'clean':
-        cleanup()
+    elif len(sys.argv) == 3 and sys.argv[1] == 'clean':
+        clean(sys.argv[2])
     else:
         print(__doc__)
 

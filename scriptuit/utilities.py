@@ -54,15 +54,15 @@ def selector_int():
         print('ERROR: input must be an integer.')
         return None
 
-def selector_list(item_list):
+def selector_list(item_list, sort=True):
     """
     Prompts the user to select from an item in the supplied list.
     """
     if type(item_list) != list:
         raise TypeError('ERROR: input to selector_list must be a list!')
 
-    # sort the input list
-    item_list.sort()
+    if sort:
+        item_list.sort()
 
     # print the options, and their numbers
     numbered_list = []
